@@ -1,0 +1,7 @@
+Grade each question independently.
+- Award points only for content present in student_answer.
+- Do not assume intended meaning if wording is missing.
+- Use max_points from the answer key.
+- Feedback should be one short sentence.
+- Verdict should be one of: correct, partially_correct, incorrect.
+
