@@ -1,15 +1,20 @@
 {
   "questions": {
-    "1": {
+    "Q1": {
       "reference_answer": "Force is a push or pull acting on an object.",
       "max_points": 5,
-      "must_include": ["push", "pull"]
+      "must_include": [
+        "push",
+        "pull"
+      ]
     },
-    "2": {
+    "Q2": {
       "reference_answer": "Mitochondria is known as the powerhouse of the cell.",
       "max_points": 5,
-      "must_include": ["mitochondria", "powerhouse"]
+      "must_include": [
+        "mitochondria",
+        "powerhouse"
+      ]
     }
   }
 }
-

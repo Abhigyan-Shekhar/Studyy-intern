@@ -5,6 +5,10 @@ import argparse
 from pathlib import Path
 from typing import Dict, List
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from src.ai_assembly_line import ExtractionAgent, GradingAgent, GradingPipeline
 from src.ai_assembly_line.llm_client import LLMClient
 from src.ai_assembly_line.pipeline import load_answer_key, save_exam_report, save_summary_csv
@@ -45,13 +49,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--extract-model",
         type=str,
-        default="gpt-4.1-mini",
+        default="gemini-2.5-flash",
         help="Model used for extraction stage.",
     )
     parser.add_argument(
         "--grade-model",
         type=str,
-        default="gpt-4.1",
+        default="gemini-2.5-flash",
         help="Model used for grading stage.",
     )
     parser.add_argument(

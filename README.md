@@ -31,9 +31,10 @@ run_pipeline.py
 ```bash
 pip install -r requirements.txt
 ```
-2. Set API key:
+3. Set up your environment variables:
+   Create a `.env` file in the root directory and add your Gemini API key:
 ```bash
-export OPENAI_API_KEY="your_key_here"
+GEMINI_API_KEY="your_actual_key_here"
 ```
 
 ## Run
@@ -42,7 +43,9 @@ python run_pipeline.py \
   --input-dir examples/input \
   --answer-key examples/config/answer_key.json \
   --rubric examples/config/rubric.txt \
-  --output-dir output
+  --output-dir output \
+  --extract-model gemini-2.5-flash \
+  --grade-model gemini-2.5-flash
 ```
 
 ## Outputs
@@ -54,7 +57,7 @@ python run_pipeline.py \
 ```json
 {
   "questions": {
-    "1": {
+    "Q1": {
       "reference_answer": "Force is a push or pull.",
       "max_points": 5,
       "must_include": ["push", "pull"]
