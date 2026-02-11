@@ -65,6 +65,28 @@ python run_pipeline.py \
   }
 }
 ```
+## How It Works
+
+The pipeline processes student exams in two distinct stages to ensure accuracy and modularity.
+
+### 1. Extraction Stage (Scribe)
+- **Input**: Raw text checksums from OCR files (e.g., `examples/input/student_001.txt`).
+- **Process**: The `ExtractionAgent` uses **Gemini 2.5 Flash** to clean up OCR errors (like typos or misaligned text) and structure the unstructured text into a standard JSON format.
+- **Output**: A JSON object containing the student's answers, keyed by Question ID (e.g., "Q1", "Q2"), along with any transcription notes.
+
+### 2. Grading Stage (Professor)
+- **Input**: The structured JSON from the extraction stage, the `answer_key.json`, and the `rubric.txt`.
+- **Process**: The `GradingAgent` uses **Gemini 2.5 Flash** to evaluate each student answer against the reference answer and rubric criteria. It checks for key concepts, partial credit rules, and specific constraints (e.g., "must include 'powerhouse'").
+- **Output**: A final report containing the score, percentage, verdict (Correct/Partially Correct/Incorrect), and specific feedback for each question.
+
+### Configuration Files
+- **`answer_key.json`**: Defines the "Gold Standard" answers, maximum points, and required keywords. Keys must match the Question IDs found in the exam (e.g., "Q1").
+- **`rubric.txt`**: Natural language instructions for the AI grader, defining the strictness and style of grading (e.g., "Partial credit for key concepts").
+
+### Recent Updates (Gemini Migration)
+- **Model**: Switched from OpenAI (GPT-4) to **Google Gemini 2.5 Flash** for faster and more cost-effective processing.
+- **SDK**: Migrated to the `google-genai` Python SDK.
+- **Security**: API keys are now managed via a `.env` file, ensuring they are never committed to version control.
 
 You can add any extra grading metadata (`keywords`, `common_mistakes`, etc.); the grading agent receives it.
 
