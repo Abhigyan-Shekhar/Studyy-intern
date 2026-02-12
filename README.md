@@ -112,3 +112,36 @@ A higher threshold flags more items; a lower threshold flags fewer.
 ```
 
 You can add any extra grading metadata (`keywords`, `common_mistakes`, etc.); the grading agent receives it.
+
+## Advanced Analytics
+
+After grading, run the analytics script to get class-level insights and question difficulty analysis:
+
+```bash
+python run_analytics.py --output-dir output
+```
+
+### What it produces
+- **Class Summary**: Overall average, highest/lowest scores
+- **Per-Question Breakdown**: Average score, pass rate, difficulty rating (Easy/Medium/Hard), verdict distribution
+- **Actionable Insights**: Identifies which topics need reteaching based on miss rates
+- **JSON Export**: `output/analytics_report.json` for programmatic use
+
+### Example output
+```
+📊  CLASS ANALYTICS REPORT
+============================================================
+📋 Class Summary
+   Students:       4
+   Class Average:  55.0%
+   Highest Score:  100.0%
+   Lowest Score:   0.0%
+
+📝 Per-Question Breakdown
+   Q1  3.75/5.0  75.0% pass  Medium  3 correct, 1 wrong
+   Q2  1.75/5.0  25.0% pass  Hard    1 correct, 1 partial, 2 wrong
+
+💡 Insights
+   1. 📊 Class average is 55.0% — acceptable but room for improvement.
+   2. 🔴 Q2: 75% of students missed this question. Consider reteaching.
+```

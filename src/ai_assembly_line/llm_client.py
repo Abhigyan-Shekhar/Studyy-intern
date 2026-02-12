@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import time
 from typing import Any, Dict, Optional
 
 try:
@@ -33,22 +34,37 @@ class LLMClient:
         user_prompt: str,
         temperature: float = 0.0,
         max_output_tokens: int = 1500,
+        max_retries: int = 3,
     ) -> Dict[str, Any]:
-        try:
-            response = self._client.models.generate_content(
-                model=self.model_name,
-                contents=user_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    temperature=temperature,
-                    max_output_tokens=max_output_tokens,
-                    response_mime_type="application/json",
-                ),
-            )
-            text = response.text
-            return _parse_json_payload(text)
-        except Exception as e:
-            raise RuntimeError(f"Gemini generation failed: {e}") from e
+        for attempt in range(max_retries + 1):
+            try:
+                response = self._client.models.generate_content(
+                    model=self.model_name,
+                    contents=user_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        temperature=temperature,
+                        max_output_tokens=max_output_tokens,
+                        response_mime_type="application/json",
+                    ),
+                )
+                text = response.text
+                return _parse_json_payload(text)
+            except Exception as e:
+                error_str = str(e)
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    # Extract retry delay from error if available
+                    wait_time = 60 * (2 ** attempt)  # 60s, 120s, 240s
+                    # Try to parse suggested retry time
+                    import re as _re
+                    delay_match = _re.search(r"retry\s+in\s+([\d.]+)s", error_str, _re.IGNORECASE)
+                    if delay_match:
+                        wait_time = max(float(delay_match.group(1)) + 5, wait_time)
+                    if attempt < max_retries:
+                        print(f"[RATE LIMIT] Attempt {attempt + 1}/{max_retries + 1} — waiting {wait_time:.0f}s before retry...")
+                        time.sleep(wait_time)
+                        continue
+                raise RuntimeError(f"Gemini generation failed: {e}") from e
 
 
 def _parse_json_payload(text: str) -> Dict[str, Any]:
