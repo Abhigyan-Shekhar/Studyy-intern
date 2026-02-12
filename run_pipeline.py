@@ -11,7 +11,12 @@ load_dotenv()
 
 from src.ai_assembly_line import ExtractionAgent, GradingAgent, GradingPipeline
 from src.ai_assembly_line.llm_client import LLMClient
-from src.ai_assembly_line.pipeline import load_answer_key, save_exam_report, save_summary_csv
+from src.ai_assembly_line.pipeline import (
+    load_answer_key,
+    save_exam_report,
+    save_review_queue,
+    save_summary_csv,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -64,12 +69,18 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional OpenAI-compatible base URL.",
     )
+    parser.add_argument(
+        "--confidence-threshold",
+        type=float,
+        default=80.0,
+        help="Flag questions with confidence below this threshold for review (0-100).",
+    )
     return parser.parse_args()
 
 
 def build_item_breakdown(grade_output) -> str:
     parts = [
-        f"Q{item.question_id}:{item.awarded_points:g}/{item.max_points:g}"
+        f"{item.question_id}:{item.awarded_points:g}/{item.max_points:g}"
         for item in grade_output.items
     ]
     return "; ".join(parts)
@@ -94,6 +105,7 @@ def main() -> None:
         )
 
     summary_rows: List[Dict[str, object]] = []
+    all_review_items: List[Dict[str, object]] = []
 
     for file_path in inputs:
         exam_id = file_path.stem
@@ -104,6 +116,7 @@ def main() -> None:
             raw_text=raw_text,
             answer_key=answer_key,
             rubric_text=rubric_text,
+            confidence_threshold=args.confidence_threshold,
         )
 
         report_path = args.output_dir / f"{exam_id}_report.json"
@@ -115,18 +128,45 @@ def main() -> None:
                 "total_awarded": f"{grade_output.total_awarded:.2f}",
                 "total_max": f"{grade_output.total_max:.2f}",
                 "percentage": f"{grade_output.percentage:.2f}",
+                "flagged_count": grade_output.flagged_count,
                 "item_breakdown": build_item_breakdown(grade_output),
             }
         )
 
+        # Collect flagged items for the review queue
+        for item in grade_output.flagged_items:
+            all_review_items.append(
+                {
+                    "exam_id": exam_id,
+                    "question_id": item.question_id,
+                    "awarded_points": item.awarded_points,
+                    "max_points": item.max_points,
+                    "verdict": item.verdict,
+                    "confidence": item.confidence,
+                    "feedback": item.feedback,
+                }
+            )
+
+        # Print result with flagged markers
+        flag_info = ""
+        if grade_output.flagged_count > 0:
+            flag_info = f" \u26a0\ufe0f  {grade_output.flagged_count} flagged for review"
         print(
             f"[OK] {exam_id}: {grade_output.total_awarded:.2f}/{grade_output.total_max:.2f} "
-            f"({grade_output.percentage:.2f}%)"
+            f"({grade_output.percentage:.2f}%){flag_info}"
         )
 
     summary_path = args.output_dir / "grades_summary.csv"
     save_summary_csv(summary_path, summary_rows)
     print(f"[DONE] Summary written to {summary_path}")
+
+    # Save review queue
+    review_path = args.output_dir / "review_queue.json"
+    save_review_queue(review_path, all_review_items)
+    if all_review_items:
+        print(f"[REVIEW] {len(all_review_items)} item(s) need human review → {review_path}")
+    else:
+        print(f"[REVIEW] No items flagged for review. All grades are high-confidence.")
 
 
 if __name__ == "__main__":

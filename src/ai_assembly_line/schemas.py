@@ -39,6 +39,9 @@ class ScribeOutput:
         return ScribeOutput(exam_id=exam_id, items=items)
 
 
+DEFAULT_CONFIDENCE_THRESHOLD = 80.0
+
+
 @dataclass
 class GradeItem:
     question_id: str
@@ -46,15 +49,25 @@ class GradeItem:
     max_points: float
     verdict: str
     feedback: str
+    confidence: float = 100.0
+    flagged_for_review: bool = False
 
     @staticmethod
-    def from_dict(data: Dict[str, Any]) -> "GradeItem":
+    def from_dict(
+        data: Dict[str, Any],
+        confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
+    ) -> "GradeItem":
+        confidence = float(data.get("confidence", 100.0))
+        verdict = str(data.get("verdict", "")).strip()
+        flagged = confidence < confidence_threshold or verdict == "partially_correct"
         return GradeItem(
             question_id=str(data.get("question_id", "")).strip(),
             awarded_points=float(data.get("awarded_points", 0)),
             max_points=float(data.get("max_points", 0)),
-            verdict=str(data.get("verdict", "")).strip(),
+            verdict=verdict,
             feedback=str(data.get("feedback", "")).strip(),
+            confidence=confidence,
+            flagged_for_review=flagged,
         )
 
 
@@ -64,16 +77,30 @@ class GradeOutput:
     items: List[GradeItem]
 
     @staticmethod
-    def from_dict(data: Dict[str, Any]) -> "GradeOutput":
+    def from_dict(
+        data: Dict[str, Any],
+        confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
+    ) -> "GradeOutput":
         items_raw = data.get("items", [])
         if not isinstance(items_raw, list):
             raise ValueError("Grade output must contain a list at key 'items'.")
 
-        items = [GradeItem.from_dict(item) for item in items_raw]
+        items = [
+            GradeItem.from_dict(item, confidence_threshold=confidence_threshold)
+            for item in items_raw
+        ]
         exam_id = str(data.get("exam_id", "")).strip()
         if not exam_id:
             raise ValueError("Grade output missing 'exam_id'.")
         return GradeOutput(exam_id=exam_id, items=items)
+
+    @property
+    def flagged_items(self) -> List[GradeItem]:
+        return [item for item in self.items if item.flagged_for_review]
+
+    @property
+    def flagged_count(self) -> int:
+        return len(self.flagged_items)
 
     @property
     def total_awarded(self) -> float:

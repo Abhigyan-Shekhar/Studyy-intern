@@ -21,12 +21,14 @@ class GradingPipeline:
         raw_text: str,
         answer_key: Dict[str, Dict[str, Any]],
         rubric_text: str,
+        confidence_threshold: float = 80.0,
     ) -> tuple[ScribeOutput, GradeOutput]:
         scribe_output = self.extraction_agent.run(exam_id=exam_id, raw_text=raw_text)
         grade_output = self.grading_agent.run(
             scribe_output=scribe_output,
             answer_key=answer_key,
             rubric_text=rubric_text,
+            confidence_threshold=confidence_threshold,
         )
         return scribe_output, grade_output
 
@@ -64,6 +66,8 @@ def save_exam_report(path: Path, scribe_output: ScribeOutput, grade_output: Grad
                 "max_points": item.max_points,
                 "verdict": item.verdict,
                 "feedback": item.feedback,
+                "confidence": item.confidence,
+                "flagged_for_review": item.flagged_for_review,
             }
             for item in grade_output.items
         ],
@@ -82,6 +86,7 @@ def save_summary_csv(path: Path, rows: Iterable[Dict[str, Any]]) -> None:
         "total_awarded",
         "total_max",
         "percentage",
+        "flagged_count",
         "item_breakdown",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
@@ -89,4 +94,14 @@ def save_summary_csv(path: Path, rows: Iterable[Dict[str, Any]]) -> None:
         writer.writeheader()
         for row in rows_list:
             writer.writerow(row)
+
+
+def save_review_queue(path: Path, review_items: List[Dict[str, Any]]) -> None:
+    """Write flagged items across all exams to a single review queue JSON file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "total_flagged": len(review_items),
+        "items": review_items,
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
 

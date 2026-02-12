@@ -49,8 +49,9 @@ python run_pipeline.py \
 ```
 
 ## Outputs
-- `output/<exam_id>_report.json`: extracted text, per-question scores, and feedback.
-- `output/grades_summary.csv`: one-line summary per exam.
+- `output/<exam_id>_report.json`: extracted text, per-question scores, confidence, and feedback.
+- `output/grades_summary.csv`: one-line summary per exam (includes `flagged_count`).
+- `output/review_queue.json`: all questions flagged for human review across all exams.
 
 ## Answer key format
 `answer_key.json` must contain:
@@ -88,5 +89,26 @@ The pipeline processes student exams in two distinct stages to ensure accuracy a
 - **SDK**: Migrated to the `google-genai` Python SDK.
 - **Security**: API keys are now managed via a `.env` file, ensuring they are never committed to version control.
 
-You can add any extra grading metadata (`keywords`, `common_mistakes`, etc.); the grading agent receives it.
+## Human-in-the-Loop Review
 
+The pipeline includes a confidence-based review system to ensure AI grades are trustworthy.
+
+### How it works
+1. The grading model outputs a **confidence score** (0–100) for each question it grades.
+2. Any question with confidence **below the threshold** (default: 80%) or graded as `partially_correct` is **flagged for review**.
+3. All flagged items are collected into `output/review_queue.json` for a human reviewer.
+
+### Customizing the threshold
+```bash
+python run_pipeline.py --confidence-threshold 90
+```
+A higher threshold flags more items; a lower threshold flags fewer.
+
+### Example output
+```
+[OK] student_001: 7.00/10.00 (70.00%) ⚠️  1 flagged for review
+[DONE] Summary written to output/grades_summary.csv
+[REVIEW] 1 item(s) need human review → output/review_queue.json
+```
+
+You can add any extra grading metadata (`keywords`, `common_mistakes`, etc.); the grading agent receives it.

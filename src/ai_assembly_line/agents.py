@@ -39,7 +39,8 @@ Hard rules:
 2) Do not improve, reinterpret, or infer missing student content.
 3) No pity points. Reward only what is present in student_answer.
 4) Keep feedback specific and short.
-5) Return valid JSON object only (no markdown).
+5) For each item, output a "confidence" score (integer 0-100) reflecting how certain you are about the awarded grade. Use lower confidence when the answer is ambiguous, the rubric is unclear, or partial credit is borderline.
+6) Return valid JSON object only (no markdown).
 
 Output schema:
 {
@@ -50,7 +51,8 @@ Output schema:
       "awarded_points": 0,
       "max_points": 0,
       "verdict": "string",
-      "feedback": "string"
+      "feedback": "string",
+      "confidence": 0
     }
   ]
 }
@@ -87,6 +89,7 @@ class GradingAgent:
         scribe_output: ScribeOutput,
         answer_key: Dict[str, Dict[str, Any]],
         rubric_text: str,
+        confidence_threshold: float = 80.0,
     ) -> GradeOutput:
         items_payload = [
             {
@@ -113,5 +116,5 @@ class GradingAgent:
             temperature=0.0,
             max_output_tokens=2200,
         )
-        return GradeOutput.from_dict(payload)
+        return GradeOutput.from_dict(payload, confidence_threshold=confidence_threshold)
 
