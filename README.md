@@ -77,6 +77,23 @@ python run_pipeline.py \
 | **Accuracy** | Higher (separation of concerns) | Slightly lower |
 | **Structured Output** | Manual JSON parsing | **Pydantic schema enforcement** |
 
+### Accuracy Comparison
+
+Tested on 4 students with the same answer key and rubric:
+
+| Student | Pipeline (2-stage) | Single-Shot (1-stage) | Match? |
+|---|---|---|---|
+| student_001 | 7.0/10 (70%) | 7.5/10 (75%) | ≈ Close (minor partial credit difference) |
+| student_002 | 10/10 (100%) | 10/10 (100%) | ✅ Exact |
+| student_003 | 0/10 (0%) | 0/10 (0%) | ✅ Exact |
+| student_004 | 5/10 (50%) | 5/10 (50%) | ✅ Exact |
+
+**Key Takeaways:**
+- **3 out of 4 students got identical scores.** The only difference was a minor partial credit variation (2.5 vs 2.0 on one question).
+- **All verdicts matched** — correct, incorrect, and partially_correct aligned across both modes.
+- **OCR denoising was accurate in single-shot** — "Defne" → "Define", "pul" → "pull", "powerh0use" → "powerhouse" were all corrected without a dedicated extraction step.
+- **When single-shot might underperform:** Very noisy OCR, complex multi-page exams, or highly ambiguous answers where separation of concerns helps.
+
 ## Outputs
 - `output/<exam_id>_report.json`: extracted text, per-question scores, confidence, and feedback.
 - `output/grades_summary.csv`: one-line summary per exam (includes `flagged_count`).
