@@ -1,9 +1,10 @@
 # AI Assembly Line for Exam Grading
 
-Two-stage grading pipeline:
-1. `ExtractionAgent` (scribe): cleans OCR noise and outputs structured question/answer JSON.
-2. `GradingAgent` (professor): scores extracted answers against answer key and rubric.
-3. `run_pipeline.py` (manager): orchestrates both stages and saves reports.
+AI-powered exam grading pipeline using **Google Gemini**. Supports two execution modes:
+- **Pipeline mode** (2-stage): Separate extraction and grading for maximum accuracy.
+- **Single-shot mode** (1-stage): Combined extraction + grading in one LLM call for speed and cost savings.
+
+Uses **Pydantic** for structured output validation and **Gemini's native schema enforcement**.
 
 ## Why this architecture
 - Prevents grading from being polluted by OCR cleanup decisions.
@@ -13,17 +14,23 @@ Two-stage grading pipeline:
 ## Project layout
 ```
 src/ai_assembly_line/
-  agents.py
-  llm_client.py
-  pipeline.py
-  schemas.py
+  agents.py              # ExtractionAgent + GradingAgent (2-stage)
+  single_shot_agent.py   # SingleShotAgent (1-stage)
+  pydantic_models.py     # Pydantic schemas for structured output
+  llm_client.py          # Gemini API wrapper with retry logic
+  pipeline.py            # Pipeline orchestration and report saving
+  schemas.py             # Dataclass schemas for pipeline mode
 examples/
   config/
     answer_key.json
     rubric.txt
   input/
     student_001.txt
-run_pipeline.py
+    student_002.txt
+    student_003.txt
+    student_004.txt
+run_pipeline.py            # Main CLI entry point
+run_analytics.py           # Class insights and difficulty analysis
 ```
 
 ## Setup
@@ -49,12 +56,26 @@ python run_pipeline.py \
   --mode pipeline  # Use 'single-shot' for 1-pass grading
 ```
 
-### Single-Shot Mode (Experimental)
-Run extraction and grading in a single LLM call for lower latency and cost:
+### Single-Shot Mode
+Run extraction and grading in a **single LLM call** using Pydantic structured output:
 ```bash
-python run_pipeline.py --mode single-shot ...
-
+python run_pipeline.py \
+  --input-dir examples/input \
+  --answer-key examples/config/answer_key.json \
+  --rubric examples/config/rubric.txt \
+  --output-dir output \
+  --grade-model gemini-2.5-flash \
+  --mode single-shot
 ```
+
+### Comparison: Pipeline vs Single-Shot
+| Feature | Pipeline (2-stage) | Single-Shot (1-stage) |
+|---|---|---|
+| **LLM Calls** | 2 per student | **1 per student** |
+| **Speed** | Slower | **~50% faster** |
+| **Cost** | Higher token usage | **Lower token usage** |
+| **Accuracy** | Higher (separation of concerns) | Slightly lower |
+| **Structured Output** | Manual JSON parsing | **Pydantic schema enforcement** |
 
 ## Outputs
 - `output/<exam_id>_report.json`: extracted text, per-question scores, confidence, and feedback.
@@ -92,10 +113,12 @@ The pipeline processes student exams in two distinct stages to ensure accuracy a
 - **`answer_key.json`**: Defines the "Gold Standard" answers, maximum points, and required keywords. Keys must match the Question IDs found in the exam (e.g., "Q1").
 - **`rubric.txt`**: Natural language instructions for the AI grader, defining the strictness and style of grading (e.g., "Partial credit for key concepts").
 
-### Recent Updates (Gemini Migration)
-- **Model**: Switched from OpenAI (GPT-4) to **Google Gemini 2.5 Flash** for faster and more cost-effective processing.
-- **SDK**: Migrated to the `google-genai` Python SDK.
-- **Security**: API keys are now managed via a `.env` file, ensuring they are never committed to version control.
+### Recent Updates
+- **Single-Shot Mode**: New `--mode single-shot` option that combines extraction and grading into one LLM call using **Pydantic** structured output.
+- **Pydantic Integration**: Output schemas are enforced via `pydantic.BaseModel` and Gemini's native `response_schema` parameter.
+- **Gemini Migration**: Switched from OpenAI (GPT-4) to **Google Gemini 2.5 Flash** via the `google-genai` SDK.
+- **Rate Limit Handling**: Automatic retry with exponential backoff for API rate limits.
+- **Security**: API keys managed via `.env` file (never committed to version control).
 
 ## Human-in-the-Loop Review
 
