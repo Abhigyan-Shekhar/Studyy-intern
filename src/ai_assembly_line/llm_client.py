@@ -3,7 +3,8 @@ import json
 import os
 import re
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Type, TypeVar
+from pydantic import BaseModel
 
 try:
     from google import genai
@@ -65,6 +66,43 @@ class LLMClient:
                         time.sleep(wait_time)
                         continue
                 raise RuntimeError(f"Gemini generation failed: {e}") from e
+
+
+    def generate_structured(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        response_schema: Type[BaseModel],
+        temperature: float = 0.0,
+        max_output_tokens: int = 1500,
+        max_retries: int = 3,
+    ) -> BaseModel:
+        """Generate structured output enforced by a Pydantic model."""
+        for attempt in range(max_retries + 1):
+            try:
+                response = self._client.models.generate_content(
+                    model=self.model_name,
+                    contents=user_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        temperature=temperature,
+                        max_output_tokens=max_output_tokens,
+                        response_mime_type="application/json",
+                        response_schema=response_schema,
+                    ),
+                )
+                # Parse JSON directly into Pydantic model
+                return response.parsed
+            except Exception as e:
+                error_str = str(e)
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    wait_time = 60 * (2 ** attempt)
+                    if attempt < max_retries:
+                        print(f"[RATE LIMIT] Attempt {attempt + 1}/{max_retries + 1} — waiting {wait_time}s...")
+                        time.sleep(wait_time)
+                        continue
+                raise RuntimeError(f"Gemini structured generation failed: {e}") from e
 
 
 def _parse_json_payload(text: str) -> Dict[str, Any]:

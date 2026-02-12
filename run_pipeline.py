@@ -17,6 +17,7 @@ from src.ai_assembly_line.pipeline import (
     save_review_queue,
     save_summary_csv,
 )
+from src.ai_assembly_line.single_shot_agent import SingleShotAgent
 
 
 def parse_args() -> argparse.Namespace:
@@ -64,6 +65,13 @@ def parse_args() -> argparse.Namespace:
         help="Model used for grading stage.",
     )
     parser.add_argument(
+        "--mode",
+        type=str,
+        choices=["pipeline", "single-shot"],
+        default="pipeline",
+        help="Execution mode: 'pipeline' (2-stage) or 'single-shot' (1-stage).",
+    )
+    parser.add_argument(
         "--base-url",
         type=str,
         default=None,
@@ -94,9 +102,15 @@ def main() -> None:
     extraction_client = LLMClient(model=args.extract_model, base_url=args.base_url)
     grading_client = LLMClient(model=args.grade_model, base_url=args.base_url)
 
-    extraction_agent = ExtractionAgent(extraction_client)
-    grading_agent = GradingAgent(grading_client)
-    pipeline = GradingPipeline(extraction_agent, grading_agent)
+    if args.mode == "pipeline":
+        extraction_agent = ExtractionAgent(extraction_client)
+        grading_agent = GradingAgent(grading_client)
+        pipeline = GradingPipeline(extraction_agent, grading_agent)
+        print(f"🚀 Running in 2-stage PIPELINE mode...")
+    else:
+        # In single-shot, we use the grade_model for the combined task
+        pipeline = SingleShotAgent(grading_client)
+        print(f"🚀 Running in 1-stage SINGLE-SHOT mode...")
 
     inputs = sorted(args.input_dir.glob(args.glob))
     if not inputs:

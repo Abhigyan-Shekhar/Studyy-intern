@@ -45,7 +45,15 @@ python run_pipeline.py \
   --rubric examples/config/rubric.txt \
   --output-dir output \
   --extract-model gemini-2.5-flash \
-  --grade-model gemini-2.5-flash
+  --grade-model gemini-2.5-flash \
+  --mode pipeline  # Use 'single-shot' for 1-pass grading
+```
+
+### Single-Shot Mode (Experimental)
+Run extraction and grading in a single LLM call for lower latency and cost:
+```bash
+python run_pipeline.py --mode single-shot ...
+
 ```
 
 ## Outputs
