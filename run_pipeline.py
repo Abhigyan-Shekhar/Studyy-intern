@@ -3,6 +3,7 @@
 import argparse
 from pathlib import Path
 from typing import Dict, List
+from tqdm import tqdm
 
 from dotenv import load_dotenv
 
@@ -82,7 +83,7 @@ def main() -> None:
     summary_rows: List[Dict[str, object]] = []
     all_review_items: List[Dict[str, object]] = []
 
-    for file_path in inputs:
+    for file_path in tqdm(inputs, desc="Evaluating Exams"):
         exam_id = file_path.stem
         raw_text = file_path.read_text(encoding="utf-8")
 
