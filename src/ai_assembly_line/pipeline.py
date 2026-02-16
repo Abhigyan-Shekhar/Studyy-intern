@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-from .schemas import GradeOutput, ScribeOutput
+from .pydantic_models import GradeOutput, ScribeOutput
 
 
 def load_answer_key(path: Path) -> Dict[str, Dict[str, Any]]:

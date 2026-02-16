@@ -1,8 +1,14 @@
 import json
 from typing import Dict, Any
 from .llm_client import LLMClient
-from .pydantic_models import ExamResult
-from .schemas import GradeOutput, GradeItem, ScribeOutput, ScribeItem
+from .pydantic_models import (
+    ExamResult,
+    GradeOutput,
+    GradeItem,
+    ScribeOutput,
+    ScribeItem,
+    DEFAULT_CONFIDENCE_THRESHOLD,
+)
 
 
 SINGLE_SHOT_SYSTEM_PROMPT = """You are an expert exam grader.
@@ -26,11 +32,11 @@ class SingleShotAgent:
         raw_text: str,
         answer_key: Dict[str, Dict[str, Any]],
         rubric_text: str,
-        confidence_threshold: float = 80.0,
+        confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
     ) -> tuple[ScribeOutput, GradeOutput]:
         """
         Run extraction and grading in a single pass.
-        Returns ScribeOutput and GradeOutput to maintain compatibility with the pipeline.
+        Returns ScribeOutput and GradeOutput for report generation.
         """
         user_prompt = (
             f"Exam ID: {exam_id}\n\n"
@@ -42,11 +48,6 @@ class SingleShotAgent:
             f"{raw_text}\n"
         )
 
-        # 1. Inspect raw OCR text
-        # 2. Identify answers for each question in Answer Key
-        # 3. Grade each answer
-        # 4. Return structured output
-
         result: ExamResult = self.client.generate_structured(
             system_prompt=SINGLE_SHOT_SYSTEM_PROMPT,
             user_prompt=user_prompt,
@@ -54,38 +55,29 @@ class SingleShotAgent:
             temperature=0.0,
         )
 
-        # Convert Pydantic Result -> ScribeOutput + GradeOutput
-        # This ensures the rest of the pipeline (reports, analytics) continues to work.
-
+        # Convert LLM output -> pipeline models
         scribe_items = []
         grade_items = []
 
         for q in result.questions:
-            # Scribe Output (Simulated)
-            scribe_items.append(
-                ScribeItem(
-                    question_id=q.question_id,
-                    question_text="",  # Schema doesn't ask for question text, keeping empty
-                    student_answer=q.student_answer,
-                    transcription_notes=["Extracted via single-shot mode"],
-                )
-            )
+            scribe_items.append(ScribeItem(
+                question_id=q.question_id,
+                student_answer=q.student_answer,
+                transcription_notes=["Extracted via single-shot mode"],
+            ))
 
-            # Grade Output
             flagged = (q.confidence < confidence_threshold) or (q.verdict == "partially_correct")
-            grade_items.append(
-                GradeItem(
-                    question_id=q.question_id,
-                    awarded_points=q.awarded_points,
-                    max_points=q.max_points,
-                    verdict=q.verdict,
-                    feedback=q.feedback,
-                    confidence=q.confidence,
-                    flagged_for_review=flagged,
-                )
-            )
+            grade_items.append(GradeItem(
+                question_id=q.question_id,
+                awarded_points=q.awarded_points,
+                max_points=q.max_points,
+                verdict=q.verdict,
+                feedback=q.feedback,
+                confidence=q.confidence,
+                flagged_for_review=flagged,
+            ))
 
-        scribe_output = ScribeOutput(exam_id=exam_id, items=scribe_items)
-        grade_output = GradeOutput(exam_id=exam_id, items=grade_items)
-
-        return scribe_output, grade_output
+        return (
+            ScribeOutput(exam_id=exam_id, items=scribe_items),
+            GradeOutput(exam_id=exam_id, items=grade_items),
+        )

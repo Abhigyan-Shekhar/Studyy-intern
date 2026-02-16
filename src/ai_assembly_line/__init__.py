@@ -1,7 +1,7 @@
 """AI Assembly Line package."""
 
 from .single_shot_agent import SingleShotAgent
-from .schemas import GradeOutput, ScribeOutput
+from .pydantic_models import GradeOutput, ScribeOutput
 
 __all__ = [
     "SingleShotAgent",
