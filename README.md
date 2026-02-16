@@ -1,29 +1,25 @@
 # AI Assembly Line for Exam Grading
 
-Two-stage grading pipeline:
-1. `ExtractionAgent` (scribe): cleans OCR noise and outputs structured question/answer JSON.
-2. `GradingAgent` (professor): scores extracted answers against answer key and rubric.
-3. `run_pipeline.py` (manager): orchestrates both stages and saves reports.
+AI-powered exam grading pipeline using **Google Gemini 2.5 Flash**.
 
-## Why this architecture
-- Prevents grading from being polluted by OCR cleanup decisions.
-- Lets you tune extraction and grading independently.
-- Produces audit-friendly artifacts (extracted text and grading output).
+Performs OCR text extraction and **rubric-based grading** in a **single LLM call** using **Pydantic** structured output and **Gemini's native schema enforcement**.
 
 ## Project layout
 ```
 src/ai_assembly_line/
-  agents.py
-  llm_client.py
-  pipeline.py
-  schemas.py
+  single_shot_agent.py   # SingleShotAgent — extraction + grading in one pass
+  pydantic_models.py     # Pydantic schemas for structured output
+  llm_client.py          # Gemini API wrapper with retry logic
+  pipeline.py            # Report saving utilities
 examples/
   config/
-    answer_key.json
     rubric.txt
   input/
     student_001.txt
-run_pipeline.py
+    student_002.txt
+    student_003.txt
+    student_004.txt
+run_pipeline.py            # Main CLI entry point
 ```
 
 ## Setup
@@ -31,7 +27,7 @@ run_pipeline.py
 ```bash
 pip install -r requirements.txt
 ```
-3. Set up your environment variables:
+2. Set up your environment variables:
    Create a `.env` file in the root directory and add your Gemini API key:
 ```bash
 GEMINI_API_KEY="your_actual_key_here"
@@ -41,11 +37,9 @@ GEMINI_API_KEY="your_actual_key_here"
 ```bash
 python run_pipeline.py \
   --input-dir examples/input \
-  --answer-key examples/config/answer_key.json \
   --rubric examples/config/rubric.txt \
   --output-dir output \
-  --extract-model gemini-2.5-flash \
-  --grade-model gemini-2.5-flash
+  --model gemini-2.5-flash
 ```
 
 ## Outputs
@@ -53,41 +47,26 @@ python run_pipeline.py \
 - `output/grades_summary.csv`: one-line summary per exam (includes `flagged_count`).
 - `output/review_queue.json`: all questions flagged for human review across all exams.
 
-## Answer key format
-`answer_key.json` must contain:
-```json
-{
-  "questions": {
-    "Q1": {
-      "reference_answer": "Force is a push or pull.",
-      "max_points": 5,
-      "must_include": ["push", "pull"]
-    }
-  }
-}
-```
 ## How It Works
 
-The pipeline processes student exams in two distinct stages to ensure accuracy and modularity.
+The pipeline processes student exams in a single pass using the **SingleShotAgent**:
 
-### 1. Extraction Stage (Scribe)
-- **Input**: Raw text checksums from OCR files (e.g., `examples/input/student_001.txt`).
-- **Process**: The `ExtractionAgent` uses **Gemini 2.5 Flash** to clean up OCR errors (like typos or misaligned text) and structure the unstructured text into a standard JSON format.
-- **Output**: A JSON object containing the student's answers, keyed by Question ID (e.g., "Q1", "Q2"), along with any transcription notes.
+1. **Input**: Raw OCR text (e.g., `examples/input/student_001.txt`) and the `rubric.txt`.
+2. **Process**: The `SingleShotAgent` sends everything to **Gemini 2.5 Flash** in one call. The model simultaneously:
+   - Denoises the OCR text (e.g., "Defne" → "Define", "pul" → "pull")
+   - Extracts the student's answers
+   - Grades each answer using **only the rubric**
+3. **Structured Output**: The response is enforced via a **Pydantic** schema (`ExamResult`), so the JSON is always valid.
+4. **Output**: A report with scores, verdicts, confidence scores, and feedback per question.
 
-### 2. Grading Stage (Professor)
-- **Input**: The structured JSON from the extraction stage, the `answer_key.json`, and the `rubric.txt`.
-- **Process**: The `GradingAgent` uses **Gemini 2.5 Flash** to evaluate each student answer against the reference answer and rubric criteria. It checks for key concepts, partial credit rules, and specific constraints (e.g., "must include 'powerhouse'").
-- **Output**: A final report containing the score, percentage, verdict (Correct/Partially Correct/Incorrect), and specific feedback for each question.
+### Configuration
+- **`rubric.txt`**: Natural language instructions for the AI grader (e.g., "Partial credit for key concepts"). This is the sole grading criteria — no answer key is used.
 
-### Configuration Files
-- **`answer_key.json`**: Defines the "Gold Standard" answers, maximum points, and required keywords. Keys must match the Question IDs found in the exam (e.g., "Q1").
-- **`rubric.txt`**: Natural language instructions for the AI grader, defining the strictness and style of grading (e.g., "Partial credit for key concepts").
-
-### Recent Updates (Gemini Migration)
-- **Model**: Switched from OpenAI (GPT-4) to **Google Gemini 2.5 Flash** for faster and more cost-effective processing.
-- **SDK**: Migrated to the `google-genai` Python SDK.
-- **Security**: API keys are now managed via a `.env` file, ensuring they are never committed to version control.
+### Key Features
+- **Rubric-Only Grading**: No answer key required. The LLM evaluates answers based purely on the rubric.
+- **Pydantic Integration**: Output schemas are enforced via `pydantic.BaseModel` and Gemini's native `response_schema` parameter.
+- **Rate Limit Handling**: Automatic retry with exponential backoff for API rate limits.
+- **Security**: API keys managed via `.env` file (never committed to version control).
 
 ## Human-in-the-Loop Review
 
@@ -106,42 +85,7 @@ A higher threshold flags more items; a lower threshold flags fewer.
 
 ### Example output
 ```
-[OK] student_001: 7.00/10.00 (70.00%) ⚠️  1 flagged for review
+[OK] student_001: 7.50/10.00 (75.00%) ⚠️  1 flagged for review
 [DONE] Summary written to output/grades_summary.csv
 [REVIEW] 1 item(s) need human review → output/review_queue.json
-```
-
-You can add any extra grading metadata (`keywords`, `common_mistakes`, etc.); the grading agent receives it.
-
-## Advanced Analytics
-
-After grading, run the analytics script to get class-level insights and question difficulty analysis:
-
-```bash
-python run_analytics.py --output-dir output
-```
-
-### What it produces
-- **Class Summary**: Overall average, highest/lowest scores
-- **Per-Question Breakdown**: Average score, pass rate, difficulty rating (Easy/Medium/Hard), verdict distribution
-- **Actionable Insights**: Identifies which topics need reteaching based on miss rates
-- **JSON Export**: `output/analytics_report.json` for programmatic use
-
-### Example output
-```
-📊  CLASS ANALYTICS REPORT
-============================================================
-📋 Class Summary
-   Students:       4
-   Class Average:  55.0%
-   Highest Score:  100.0%
-   Lowest Score:   0.0%
-
-📝 Per-Question Breakdown
-   Q1  3.75/5.0  75.0% pass  Medium  3 correct, 1 wrong
-   Q2  1.75/5.0  25.0% pass  Hard    1 correct, 1 partial, 2 wrong
-
-💡 Insights
-   1. 📊 Class average is 55.0% — acceptable but room for improvement.
-   2. 🔴 Q2: 75% of students missed this question. Consider reteaching.
 ```
