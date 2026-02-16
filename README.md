@@ -1,25 +1,17 @@
 # AI Assembly Line for Exam Grading
 
-AI-powered exam grading pipeline using **Google Gemini**. Supports two execution modes:
-- **Pipeline mode** (2-stage): Separate extraction and grading for maximum accuracy.
-- **Single-shot mode** (1-stage): Combined extraction + grading in one LLM call for speed and cost savings.
+AI-powered exam grading pipeline using **Google Gemini 2.5 Flash**.
 
-Uses **Pydantic** for structured output validation and **Gemini's native schema enforcement**.
-
-## Why this architecture
-- Prevents grading from being polluted by OCR cleanup decisions.
-- Lets you tune extraction and grading independently.
-- Produces audit-friendly artifacts (extracted text and grading output).
+Performs OCR text extraction and grading in a **single LLM call** using **Pydantic** structured output and **Gemini's native schema enforcement**.
 
 ## Project layout
 ```
 src/ai_assembly_line/
-  agents.py              # ExtractionAgent + GradingAgent (2-stage)
-  single_shot_agent.py   # SingleShotAgent (1-stage)
+  single_shot_agent.py   # SingleShotAgent — extraction + grading in one pass
   pydantic_models.py     # Pydantic schemas for structured output
   llm_client.py          # Gemini API wrapper with retry logic
-  pipeline.py            # Pipeline orchestration and report saving
-  schemas.py             # Dataclass schemas for pipeline mode
+  pipeline.py            # Report saving utilities
+  schemas.py             # Dataclass schemas for internal data
 examples/
   config/
     answer_key.json
@@ -37,7 +29,7 @@ run_pipeline.py            # Main CLI entry point
 ```bash
 pip install -r requirements.txt
 ```
-3. Set up your environment variables:
+2. Set up your environment variables:
    Create a `.env` file in the root directory and add your Gemini API key:
 ```bash
 GEMINI_API_KEY="your_actual_key_here"
@@ -50,48 +42,8 @@ python run_pipeline.py \
   --answer-key examples/config/answer_key.json \
   --rubric examples/config/rubric.txt \
   --output-dir output \
-  --extract-model gemini-2.5-flash \
-  --grade-model gemini-2.5-flash \
-  --mode pipeline  # Use 'single-shot' for 1-pass grading
+  --model gemini-2.5-flash
 ```
-
-### Single-Shot Mode
-Run extraction and grading in a **single LLM call** using Pydantic structured output:
-```bash
-python run_pipeline.py \
-  --input-dir examples/input \
-  --answer-key examples/config/answer_key.json \
-  --rubric examples/config/rubric.txt \
-  --output-dir output \
-  --grade-model gemini-2.5-flash \
-  --mode single-shot
-```
-
-### Comparison: Pipeline vs Single-Shot
-| Feature | Pipeline (2-stage) | Single-Shot (1-stage) |
-|---|---|---|
-| **LLM Calls** | 2 per student | **1 per student** |
-| **Speed** | Slower | **~50% faster** |
-| **Cost** | Higher token usage | **Lower token usage** |
-| **Accuracy** | Higher (separation of concerns) | Slightly lower |
-| **Structured Output** | Manual JSON parsing | **Pydantic schema enforcement** |
-
-### Accuracy Comparison
-
-Tested on 4 students with the same answer key and rubric:
-
-| Student | Pipeline (2-stage) | Single-Shot (1-stage) | Match? |
-|---|---|---|---|
-| student_001 | 7.0/10 (70%) | 7.5/10 (75%) | ≈ Close (minor partial credit difference) |
-| student_002 | 10/10 (100%) | 10/10 (100%) | ✅ Exact |
-| student_003 | 0/10 (0%) | 0/10 (0%) | ✅ Exact |
-| student_004 | 5/10 (50%) | 5/10 (50%) | ✅ Exact |
-
-**Key Takeaways:**
-- **3 out of 4 students got identical scores.** The only difference was a minor partial credit variation (2.5 vs 2.0 on one question).
-- **All verdicts matched** — correct, incorrect, and partially_correct aligned across both modes.
-- **OCR denoising was accurate in single-shot** — "Defne" → "Define", "pul" → "pull", "powerh0use" → "powerhouse" were all corrected without a dedicated extraction step.
-- **When single-shot might underperform:** Very noisy OCR, complex multi-page exams, or highly ambiguous answers where separation of concerns helps.
 
 ## Outputs
 - `output/<exam_id>_report.json`: extracted text, per-question scores, confidence, and feedback.
@@ -111,28 +63,25 @@ Tested on 4 students with the same answer key and rubric:
   }
 }
 ```
+
 ## How It Works
 
-The pipeline processes student exams in two distinct stages to ensure accuracy and modularity.
+The pipeline processes student exams in a single pass using the **SingleShotAgent**:
 
-### 1. Extraction Stage (Scribe)
-- **Input**: Raw text checksums from OCR files (e.g., `examples/input/student_001.txt`).
-- **Process**: The `ExtractionAgent` uses **Gemini 2.5 Flash** to clean up OCR errors (like typos or misaligned text) and structure the unstructured text into a standard JSON format.
-- **Output**: A JSON object containing the student's answers, keyed by Question ID (e.g., "Q1", "Q2"), along with any transcription notes.
-
-### 2. Grading Stage (Professor)
-- **Input**: The structured JSON from the extraction stage, the `answer_key.json`, and the `rubric.txt`.
-- **Process**: The `GradingAgent` uses **Gemini 2.5 Flash** to evaluate each student answer against the reference answer and rubric criteria. It checks for key concepts, partial credit rules, and specific constraints (e.g., "must include 'powerhouse'").
-- **Output**: A final report containing the score, percentage, verdict (Correct/Partially Correct/Incorrect), and specific feedback for each question.
+1. **Input**: Raw OCR text (e.g., `examples/input/student_001.txt`), the `answer_key.json`, and the `rubric.txt`.
+2. **Process**: The `SingleShotAgent` sends everything to **Gemini 2.5 Flash** in one call. The model simultaneously:
+   - Denoises the OCR text (e.g., "Defne" → "Define", "pul" → "pull")
+   - Extracts the student's answers
+   - Grades each answer against the answer key and rubric
+3. **Structured Output**: The response is enforced via a **Pydantic** schema (`ExamResult`), so the JSON is always valid.
+4. **Output**: A report with scores, verdicts, confidence scores, and feedback per question.
 
 ### Configuration Files
-- **`answer_key.json`**: Defines the "Gold Standard" answers, maximum points, and required keywords. Keys must match the Question IDs found in the exam (e.g., "Q1").
-- **`rubric.txt`**: Natural language instructions for the AI grader, defining the strictness and style of grading (e.g., "Partial credit for key concepts").
+- **`answer_key.json`**: Defines the reference answers, maximum points, and required keywords.
+- **`rubric.txt`**: Natural language instructions for the AI grader (e.g., "Partial credit for key concepts").
 
-### Recent Updates
-- **Single-Shot Mode**: New `--mode single-shot` option that combines extraction and grading into one LLM call using **Pydantic** structured output.
+### Key Features
 - **Pydantic Integration**: Output schemas are enforced via `pydantic.BaseModel` and Gemini's native `response_schema` parameter.
-- **Gemini Migration**: Switched from OpenAI (GPT-4) to **Google Gemini 2.5 Flash** via the `google-genai` SDK.
 - **Rate Limit Handling**: Automatic retry with exponential backoff for API rate limits.
 - **Security**: API keys managed via `.env` file (never committed to version control).
 
@@ -153,10 +102,7 @@ A higher threshold flags more items; a lower threshold flags fewer.
 
 ### Example output
 ```
-[OK] student_001: 7.00/10.00 (70.00%) ⚠️  1 flagged for review
+[OK] student_001: 7.50/10.00 (75.00%) ⚠️  1 flagged for review
 [DONE] Summary written to output/grades_summary.csv
 [REVIEW] 1 item(s) need human review → output/review_queue.json
 ```
-
-You can add any extra grading metadata (`keywords`, `common_mistakes`, etc.); the grading agent receives it.
-

@@ -8,19 +8,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.ai_assembly_line import ExtractionAgent, GradingAgent, GradingPipeline
 from src.ai_assembly_line.llm_client import LLMClient
+from src.ai_assembly_line.single_shot_agent import SingleShotAgent
 from src.ai_assembly_line.pipeline import (
     load_answer_key,
     save_exam_report,
     save_review_queue,
     save_summary_csv,
 )
-from src.ai_assembly_line.single_shot_agent import SingleShotAgent
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run two-stage AI exam grading pipeline.")
+    parser = argparse.ArgumentParser(description="Run AI exam grading pipeline.")
     parser.add_argument(
         "--input-dir",
         type=Path,
@@ -52,29 +51,10 @@ def parse_args() -> argparse.Namespace:
         help="Output directory for reports.",
     )
     parser.add_argument(
-        "--extract-model",
+        "--model",
         type=str,
         default="gemini-2.5-flash",
-        help="Model used for extraction stage.",
-    )
-    parser.add_argument(
-        "--grade-model",
-        type=str,
-        default="gemini-2.5-flash",
-        help="Model used for grading stage.",
-    )
-    parser.add_argument(
-        "--mode",
-        type=str,
-        choices=["pipeline", "single-shot"],
-        default="pipeline",
-        help="Execution mode: 'pipeline' (2-stage) or 'single-shot' (1-stage).",
-    )
-    parser.add_argument(
-        "--base-url",
-        type=str,
-        default=None,
-        help="Optional OpenAI-compatible base URL.",
+        help="Gemini model to use for grading.",
     )
     parser.add_argument(
         "--confidence-threshold",
@@ -98,18 +78,8 @@ def main() -> None:
     answer_key = load_answer_key(args.answer_key)
     rubric_text = args.rubric.read_text(encoding="utf-8")
 
-    extraction_client = LLMClient(model=args.extract_model, base_url=args.base_url)
-    grading_client = LLMClient(model=args.grade_model, base_url=args.base_url)
-
-    if args.mode == "pipeline":
-        extraction_agent = ExtractionAgent(extraction_client)
-        grading_agent = GradingAgent(grading_client)
-        pipeline = GradingPipeline(extraction_agent, grading_agent)
-        print(f"🚀 Running in 2-stage PIPELINE mode...")
-    else:
-        # In single-shot, we use the grade_model for the combined task
-        pipeline = SingleShotAgent(grading_client)
-        print(f"🚀 Running in 1-stage SINGLE-SHOT mode...")
+    client = LLMClient(model=args.model)
+    agent = SingleShotAgent(client)
 
     inputs = sorted(args.input_dir.glob(args.glob))
     if not inputs:
@@ -124,7 +94,7 @@ def main() -> None:
         exam_id = file_path.stem
         raw_text = file_path.read_text(encoding="utf-8")
 
-        scribe_output, grade_output = pipeline.run_one(
+        scribe_output, grade_output = agent.run_one(
             exam_id=exam_id,
             raw_text=raw_text,
             answer_key=answer_key,
@@ -163,7 +133,7 @@ def main() -> None:
         # Print result with flagged markers
         flag_info = ""
         if grade_output.flagged_count > 0:
-            flag_info = f" \u26a0\ufe0f  {grade_output.flagged_count} flagged for review"
+            flag_info = f" ⚠️  {grade_output.flagged_count} flagged for review"
         print(
             f"[OK] {exam_id}: {grade_output.total_awarded:.2f}/{grade_output.total_max:.2f} "
             f"({grade_output.percentage:.2f}%){flag_info}"
@@ -184,4 +154,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

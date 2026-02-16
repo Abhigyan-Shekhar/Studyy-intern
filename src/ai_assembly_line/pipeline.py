@@ -4,32 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-from .agents import ExtractionAgent, GradingAgent
 from .schemas import GradeOutput, ScribeOutput
-
-
-class GradingPipeline:
-    def __init__(self, extraction_agent: ExtractionAgent, grading_agent: GradingAgent):
-        self.extraction_agent = extraction_agent
-        self.grading_agent = grading_agent
-
-    def run_one(
-        self,
-        *,
-        exam_id: str,
-        raw_text: str,
-        answer_key: Dict[str, Dict[str, Any]],
-        rubric_text: str,
-        confidence_threshold: float = 80.0,
-    ) -> tuple[ScribeOutput, GradeOutput]:
-        scribe_output = self.extraction_agent.run(exam_id=exam_id, raw_text=raw_text)
-        grade_output = self.grading_agent.run(
-            scribe_output=scribe_output,
-            answer_key=answer_key,
-            rubric_text=rubric_text,
-            confidence_threshold=confidence_threshold,
-        )
-        return scribe_output, grade_output
 
 
 def load_answer_key(path: Path) -> Dict[str, Dict[str, Any]]:
@@ -103,4 +78,3 @@ def save_review_queue(path: Path, review_items: List[Dict[str, Any]]) -> None:
         "items": review_items,
     }
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
-
