@@ -3,7 +3,7 @@ import json
 import os
 import re
 import time
-from typing import Any, Dict, Optional, Type, TypeVar
+from typing import Any, Dict, Optional, Type
 from pydantic import BaseModel
 
 try:
@@ -57,8 +57,7 @@ class LLMClient:
                     # Extract retry delay from error if available
                     wait_time = 60 * (2 ** attempt)  # 60s, 120s, 240s
                     # Try to parse suggested retry time
-                    import re as _re
-                    delay_match = _re.search(r"retry\s+in\s+([\d.]+)s", error_str, _re.IGNORECASE)
+                    delay_match = re.search(r"retry\s+in\s+([\d.]+)s", error_str, re.IGNORECASE)
                     if delay_match:
                         wait_time = max(float(delay_match.group(1)) + 5, wait_time)
                     if attempt < max_retries:

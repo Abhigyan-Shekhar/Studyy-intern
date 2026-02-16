@@ -9,8 +9,6 @@ Reads graded report JSONs from the output directory and produces:
 Usage:
     python run_analytics.py --output-dir output
 """
-from __future__ import annotations
-
 import argparse
 import json
 from collections import defaultdict
