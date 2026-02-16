@@ -1,5 +1,7 @@
 import json
 from typing import Dict, Any
+from langchain_core.output_parsers import PydanticOutputParser
+
 from .llm_client import LLMClient
 from .pydantic_models import (
     ExamResult,
@@ -21,8 +23,16 @@ Your task is to read the raw text from a student's answer sheet, extract the ans
 1) Denoise the text: The input is raw OCR. Correct typos and formatting issues when extracting the answer.
 2) Grade strictly using only the Rubric above. Do not infer or assume any additional grading criteria.
 3) Confidence: Assign a confidence score (0-100) based on how certain you are.
-4) Output: Return a structured JSON matching the schema.
+4) Output: Return a structured JSON matching the format instructions below.
+
+## Format Instructions
+{format_instructions}
 """
+
+
+# Create the parser from the Pydantic model
+parser = PydanticOutputParser(pydantic_object=ExamResult)
+
 
 class SingleShotAgent:
     def __init__(self, client: LLMClient):
@@ -40,7 +50,14 @@ class SingleShotAgent:
         Run extraction and grading in a single pass.
         Returns ScribeOutput and GradeOutput for report generation.
         """
-        system_prompt = SINGLE_SHOT_SYSTEM_PROMPT.format(rubric=rubric_text.strip())
+        # Get format instructions from the Pydantic parser
+        format_instructions = parser.get_format_instructions()
+
+        # Build system prompt with rubric + format instructions
+        system_prompt = SINGLE_SHOT_SYSTEM_PROMPT.format(
+            rubric=rubric_text.strip(),
+            format_instructions=format_instructions,
+        )
 
         user_prompt = (
             f"Exam ID: {exam_id}\n\n"
@@ -48,12 +65,15 @@ class SingleShotAgent:
             f"{raw_text}\n"
         )
 
-        result: ExamResult = self.client.generate_structured(
+        # Get raw text response from LLM
+        raw_response = self.client.generate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            response_schema=ExamResult,
             temperature=0.0,
         )
+
+        # Parse the response using PydanticOutputParser
+        result: ExamResult = parser.parse(raw_response)
 
         # Convert LLM output -> pipeline models
         scribe_items = []
