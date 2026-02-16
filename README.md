@@ -2,7 +2,7 @@
 
 AI-powered exam grading pipeline using **Google Gemini 2.5 Flash**.
 
-Performs OCR text extraction and grading in a **single LLM call** using **Pydantic** structured output and **Gemini's native schema enforcement**.
+Performs OCR text extraction and **rubric-based grading** in a **single LLM call** using **Pydantic** structured output and **Gemini's native schema enforcement**.
 
 ## Project layout
 ```
@@ -11,10 +11,8 @@ src/ai_assembly_line/
   pydantic_models.py     # Pydantic schemas for structured output
   llm_client.py          # Gemini API wrapper with retry logic
   pipeline.py            # Report saving utilities
-  schemas.py             # Dataclass schemas for internal data
 examples/
   config/
-    answer_key.json
     rubric.txt
   input/
     student_001.txt
@@ -39,7 +37,6 @@ GEMINI_API_KEY="your_actual_key_here"
 ```bash
 python run_pipeline.py \
   --input-dir examples/input \
-  --answer-key examples/config/answer_key.json \
   --rubric examples/config/rubric.txt \
   --output-dir output \
   --model gemini-2.5-flash
@@ -50,37 +47,23 @@ python run_pipeline.py \
 - `output/grades_summary.csv`: one-line summary per exam (includes `flagged_count`).
 - `output/review_queue.json`: all questions flagged for human review across all exams.
 
-## Answer key format
-`answer_key.json` must contain:
-```json
-{
-  "questions": {
-    "Q1": {
-      "reference_answer": "Force is a push or pull.",
-      "max_points": 5,
-      "must_include": ["push", "pull"]
-    }
-  }
-}
-```
-
 ## How It Works
 
 The pipeline processes student exams in a single pass using the **SingleShotAgent**:
 
-1. **Input**: Raw OCR text (e.g., `examples/input/student_001.txt`), the `answer_key.json`, and the `rubric.txt`.
+1. **Input**: Raw OCR text (e.g., `examples/input/student_001.txt`) and the `rubric.txt`.
 2. **Process**: The `SingleShotAgent` sends everything to **Gemini 2.5 Flash** in one call. The model simultaneously:
    - Denoises the OCR text (e.g., "Defne" → "Define", "pul" → "pull")
    - Extracts the student's answers
-   - Grades each answer against the answer key and rubric
+   - Grades each answer using **only the rubric**
 3. **Structured Output**: The response is enforced via a **Pydantic** schema (`ExamResult`), so the JSON is always valid.
 4. **Output**: A report with scores, verdicts, confidence scores, and feedback per question.
 
-### Configuration Files
-- **`answer_key.json`**: Defines the reference answers, maximum points, and required keywords.
-- **`rubric.txt`**: Natural language instructions for the AI grader (e.g., "Partial credit for key concepts").
+### Configuration
+- **`rubric.txt`**: Natural language instructions for the AI grader (e.g., "Partial credit for key concepts"). This is the sole grading criteria — no answer key is used.
 
 ### Key Features
+- **Rubric-Only Grading**: No answer key required. The LLM evaluates answers based purely on the rubric.
 - **Pydantic Integration**: Output schemas are enforced via `pydantic.BaseModel` and Gemini's native `response_schema` parameter.
 - **Rate Limit Handling**: Automatic retry with exponential backoff for API rate limits.
 - **Security**: API keys managed via `.env` file (never committed to version control).

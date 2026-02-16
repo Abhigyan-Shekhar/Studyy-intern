@@ -11,7 +11,6 @@ load_dotenv()
 from src.ai_assembly_line.llm_client import LLMClient
 from src.ai_assembly_line.single_shot_agent import SingleShotAgent
 from src.ai_assembly_line.pipeline import (
-    load_answer_key,
     save_exam_report,
     save_review_queue,
     save_summary_csv,
@@ -31,12 +30,6 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="*.txt",
         help="Glob pattern for input files.",
-    )
-    parser.add_argument(
-        "--answer-key",
-        type=Path,
-        default=Path("examples/config/answer_key.json"),
-        help="Answer key JSON file.",
     )
     parser.add_argument(
         "--rubric",
@@ -75,7 +68,6 @@ def build_item_breakdown(grade_output) -> str:
 
 def main() -> None:
     args = parse_args()
-    answer_key = load_answer_key(args.answer_key)
     rubric_text = args.rubric.read_text(encoding="utf-8")
 
     client = LLMClient(model=args.model)
@@ -97,7 +89,6 @@ def main() -> None:
         scribe_output, grade_output = agent.run_one(
             exam_id=exam_id,
             raw_text=raw_text,
-            answer_key=answer_key,
             rubric_text=rubric_text,
             confidence_threshold=args.confidence_threshold,
         )

@@ -12,11 +12,11 @@ from .pydantic_models import (
 
 
 SINGLE_SHOT_SYSTEM_PROMPT = """You are an expert exam grader.
-Your task is to read the raw text from a student's answer sheet, identify the answers corresponding to the provided Answer Key, and grade them against the Rubric.
+Your task is to read the raw text from a student's answer sheet, extract the answers, and grade them using only the provided Rubric.
 
 Hard Rules:
 1) Denoise the text: The input is raw OCR. Correct typos and formatting issues when extracting the answer.
-2) Grade strictly: Use the provided Answer Key and Rubric.
+2) Grade strictly using only the Rubric provided. Do not infer or assume any additional grading criteria.
 3) Confidence: Assign a confidence score (0-100) based on how certain you are.
 4) Output: Return a structured JSON matching the schema.
 """
@@ -30,7 +30,6 @@ class SingleShotAgent:
         *,
         exam_id: str,
         raw_text: str,
-        answer_key: Dict[str, Dict[str, Any]],
         rubric_text: str,
         confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
     ) -> tuple[ScribeOutput, GradeOutput]:
@@ -42,8 +41,6 @@ class SingleShotAgent:
             f"Exam ID: {exam_id}\n\n"
             "Rubric:\n"
             f"{rubric_text.strip()}\n\n"
-            "Answer Key:\n"
-            f"{json.dumps(answer_key, indent=2)}\n\n"
             "Raw OCR Text:\n"
             f"{raw_text}\n"
         )
