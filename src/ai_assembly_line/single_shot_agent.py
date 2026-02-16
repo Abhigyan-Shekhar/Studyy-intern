@@ -12,11 +12,14 @@ from .pydantic_models import (
 
 
 SINGLE_SHOT_SYSTEM_PROMPT = """You are an expert exam grader.
-Your task is to read the raw text from a student's answer sheet, extract the answers, and grade them using only the provided Rubric.
+Your task is to read the raw text from a student's answer sheet, extract the answers, and grade them using only the Rubric below.
 
-Hard Rules:
+## Rubric
+{rubric}
+
+## Hard Rules
 1) Denoise the text: The input is raw OCR. Correct typos and formatting issues when extracting the answer.
-2) Grade strictly using only the Rubric provided. Do not infer or assume any additional grading criteria.
+2) Grade strictly using only the Rubric above. Do not infer or assume any additional grading criteria.
 3) Confidence: Assign a confidence score (0-100) based on how certain you are.
 4) Output: Return a structured JSON matching the schema.
 """
@@ -37,16 +40,16 @@ class SingleShotAgent:
         Run extraction and grading in a single pass.
         Returns ScribeOutput and GradeOutput for report generation.
         """
+        system_prompt = SINGLE_SHOT_SYSTEM_PROMPT.format(rubric=rubric_text.strip())
+
         user_prompt = (
             f"Exam ID: {exam_id}\n\n"
-            "Rubric:\n"
-            f"{rubric_text.strip()}\n\n"
             "Raw OCR Text:\n"
             f"{raw_text}\n"
         )
 
         result: ExamResult = self.client.generate_structured(
-            system_prompt=SINGLE_SHOT_SYSTEM_PROMPT,
+            system_prompt=system_prompt,
             user_prompt=user_prompt,
             response_schema=ExamResult,
             temperature=0.0,
