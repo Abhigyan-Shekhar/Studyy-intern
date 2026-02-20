@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.ai_assembly_line.llm_client import LLMClient
+from langchain_google_genai import ChatGoogleGenerativeAI
 from src.ai_assembly_line.single_shot_agent import SingleShotAgent
 from src.ai_assembly_line.pipeline import (
     save_exam_report,
@@ -75,8 +75,8 @@ def main() -> None:
     args = parse_args()
     rubric_text = args.rubric.read_text(encoding="utf-8")
 
-    client = LLMClient(model=args.model)
-    agent = SingleShotAgent(client)
+    llm = ChatGoogleGenerativeAI(model=args.model, temperature=0)
+    agent = SingleShotAgent(llm)
 
     inputs = sorted(args.input_dir.glob(args.glob))
     if not inputs:
