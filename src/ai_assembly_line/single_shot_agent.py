@@ -1,8 +1,9 @@
 import json
+import logging
 from typing import Dict, Any
 from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.messages import SystemMessage, HumanMessage
 
-from .llm_client import LLMClient
 from .pydantic_models import (
     ExamResult,
     GradeOutput,
@@ -11,6 +12,8 @@ from .pydantic_models import (
     ScribeItem,
     DEFAULT_CONFIDENCE_THRESHOLD,
 )
+
+logger = logging.getLogger(__name__)
 
 
 SINGLE_SHOT_SYSTEM_PROMPT = """You are an expert exam grader.
@@ -35,8 +38,12 @@ parser = PydanticOutputParser(pydantic_object=ExamResult)
 
 
 class SingleShotAgent:
-    def __init__(self, client: LLMClient):
-        self.client = client
+    def __init__(self, llm):
+        """
+        Args:
+            llm: A LangChain chat model (e.g., ChatGoogleGenerativeAI).
+        """
+        self.llm = llm
 
     def run_one(
         self,
@@ -65,15 +72,14 @@ class SingleShotAgent:
             f"{raw_text}\n"
         )
 
-        # Get raw text response from LLM
-        raw_response = self.client.generate(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            temperature=0.0,
-        )
+        # Invoke LangChain LLM with system + human messages
+        response = self.llm.invoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt),
+        ])
 
         # Parse the response using PydanticOutputParser
-        result: ExamResult = parser.parse(raw_response)
+        result: ExamResult = parser.parse(response.content)
 
         # Convert LLM output -> pipeline models
         scribe_items = []
