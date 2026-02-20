@@ -23,15 +23,23 @@ parser = PydanticOutputParser(pydantic_object=ExamResult)
 prompt = ChatPromptTemplate.from_messages([
     ("system",
      """You are an expert exam grader.
-Your task is to read the raw text from a student's answer sheet, extract the answers, and grade them using only the Rubric below.
+Your task is to read raw, unstructured text from a student's answer sheet, segment it into question–answer pairs, and grade each answer using only the Rubric below.
+
+## Q&A Segmentation Rules
+The input text may be messy and inconsistently formatted. You must:
+1) Ignore non-answer content such as student name, roll number, class, date, or other metadata.
+2) Identify questions and their corresponding answers by analyzing textual structure and semantic intent.
+3) Handle varied formatting: numbered (1., 2.), lettered ((a), (b)), dashed, or completely unlabeled.
+4) If a question and answer appear together without a clear separator, use context to split them.
+5) Assign sequential question IDs (Q1, Q2, ...) based on the order they appear.
 
 ## Rubric
 {rubric}
 
-## Hard Rules
+## Grading Rules
 1) Denoise the text: The input is raw OCR. Correct typos and formatting issues when extracting the answer.
 2) Grade strictly using only the Rubric above. Do not infer or assume any additional grading criteria.
-3) Confidence: Assign a confidence score (0-100) based on how certain you are.
+3) Confidence: Assign a confidence score (0-100) based on how certain you are about both the segmentation and the grade.
 4) Output: Return a structured JSON matching the format instructions below.
 
 ## Format Instructions
@@ -47,7 +55,7 @@ class SingleShotAgent:
         Args:
             llm: A LangChain chat model (e.g., ChatGoogleGenerativeAI).
         """
-        # LCEL chain: prompt → LLM → parser
+        # LCEL chain: prompt -> LLM -> parser
         self.chain = prompt | llm | parser
 
     def run_one(
