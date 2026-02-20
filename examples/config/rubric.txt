@@ -1,7 +1,8 @@
 Grade each question independently.
 - Award points only for content present in student_answer.
 - Do not assume intended meaning if wording is missing.
-- Use max_points from the answer key.
+- Determine max_points based on the complexity and scope of each question.
 - Feedback should be one short sentence.
-- Verdict should be one of: correct, partially_correct, incorrect.
-
+- Verdict must be one of: correct, partially_correct, incorrect.
+- Award partial credit when a student demonstrates understanding of key concepts but is missing details.
+- Award zero points if the answer is completely wrong or irrelevant.
