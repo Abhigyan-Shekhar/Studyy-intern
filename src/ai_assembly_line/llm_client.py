@@ -1,5 +1,5 @@
 
-import json
+import logging
 import os
 import re
 import time
@@ -12,6 +12,8 @@ try:
 except ImportError:
     genai = None
     types = None
+
+logger = logging.getLogger(__name__)
 
 
 class LLMClient:
@@ -58,7 +60,7 @@ class LLMClient:
                     if delay_match:
                         wait_time = max(float(delay_match.group(1)) + 5, wait_time)
                     if attempt < max_retries:
-                        print(f"[RATE LIMIT] Attempt {attempt + 1}/{max_retries + 1} — waiting {wait_time:.0f}s...")
+                        logger.warning("Rate limit hit — attempt %d/%d, waiting %.0fs...", attempt + 1, max_retries + 1, wait_time)
                         time.sleep(wait_time)
                         continue
                 raise RuntimeError(f"Gemini generation failed: {e}") from e

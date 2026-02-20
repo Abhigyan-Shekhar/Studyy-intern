@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import logging
 from pathlib import Path
 from typing import Dict, List
 from tqdm import tqdm
@@ -16,6 +17,9 @@ from src.ai_assembly_line.pipeline import (
     save_review_queue,
     save_summary_csv,
 )
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
@@ -122,26 +126,27 @@ def main() -> None:
                 }
             )
 
-        # Print result with flagged markers
+        # Log result with flagged markers
         flag_info = ""
         if grade_output.flagged_count > 0:
             flag_info = f" ⚠️  {grade_output.flagged_count} flagged for review"
-        print(
-            f"[OK] {exam_id}: {grade_output.total_awarded:.2f}/{grade_output.total_max:.2f} "
-            f"({grade_output.percentage:.2f}%){flag_info}"
+        logger.info(
+            "%s: %.2f/%.2f (%.2f%%)%s",
+            exam_id, grade_output.total_awarded, grade_output.total_max,
+            grade_output.percentage, flag_info,
         )
 
     summary_path = args.output_dir / "grades_summary.csv"
     save_summary_csv(summary_path, summary_rows)
-    print(f"[DONE] Summary written to {summary_path}")
+    logger.info("Summary written to %s", summary_path)
 
     # Save review queue
     review_path = args.output_dir / "review_queue.json"
     save_review_queue(review_path, all_review_items)
     if all_review_items:
-        print(f"[REVIEW] {len(all_review_items)} item(s) need human review → {review_path}")
+        logger.warning("%d item(s) need human review → %s", len(all_review_items), review_path)
     else:
-        print(f"[REVIEW] No items flagged for review. All grades are high-confidence.")
+        logger.info("No items flagged for review. All grades are high-confidence.")
 
 
 if __name__ == "__main__":
