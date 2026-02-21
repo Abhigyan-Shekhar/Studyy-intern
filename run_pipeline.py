@@ -75,7 +75,7 @@ def main() -> None:
     args = parse_args()
     rubric_text = args.rubric.read_text(encoding="utf-8")
 
-    llm = ChatGoogleGenerativeAI(model=args.model, temperature=0)
+    llm = ChatGoogleGenerativeAI(model=args.model, temperature=0).with_retry(stop_after_attempt=3)
     agent = SingleShotAgent(llm)
 
     inputs = sorted(args.input_dir.glob(args.glob))
