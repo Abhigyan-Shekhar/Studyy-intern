@@ -70,13 +70,16 @@ class SingleShotAgent:
         Run extraction and grading in a single pass.
         Returns ScribeOutput and GradeOutput for report generation.
         """
-        # Invoke the chain with all template variables
-        result: ExamResult = self.chain.invoke({
-            "rubric": rubric_text.strip(),
-            "format_instructions": parser.get_format_instructions(),
-            "exam_id": exam_id,
-            "raw_text": raw_text,
-        })
+        try:
+            result: ExamResult = self.chain.invoke({
+                "rubric": rubric_text.strip(),
+                "format_instructions": parser.get_format_instructions(),
+                "exam_id": exam_id,
+                "raw_text": raw_text,
+            })
+        except Exception as e:
+            logger.exception("LLM invocation failed for exam %s", exam_id)
+            raise
 
         # Convert LLM output -> pipeline models
         scribe_items = []
